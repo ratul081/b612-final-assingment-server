@@ -5,9 +5,10 @@ const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const port = process.env.PORT || 3000;
-const stripe = require("stripe")(process.env.STRIPE_KEY);
+const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
 // Middleware
+// app.use(cors());
 app.use(
   cors({
     origin: true,
@@ -15,6 +16,9 @@ app.use(
     credentials: true,
   })
 );
+// const corsOptions = {
+//   origin: "https://b612-final-assingment.web.app"
+// };
 app.use(express.json());
 require("colors");
 
@@ -89,15 +93,15 @@ async function run() {
     app.post("/create-payment-intent", async (req, res) => {
       const booking = req.body;
       const price = booking.price;
-      console.log("🚀 ~ app.post ~ price:", price)
+      // console.log("🚀 ~ app.post ~ price:", price)
       const amount = parseInt(price) * 100;
-      console.log("🚀 ~ app.post ~ amount:", amount)
+      // console.log("🚀 ~ app.post ~ amount:", amount)
       const paymentIntent = await stripe.paymentIntents.create({
         currency: "usd",
         amount: amount,
         payment_method_types: ["card"],
       });
-      console.log("🚀 ~ app.post ~ paymentIntent:", paymentIntent)
+      // console.log("🚀 ~ app.post ~ paymentIntent:", paymentIntent)
       res.send({
         clientSecret: paymentIntent.client_secret,
       });
@@ -448,7 +452,9 @@ async function run() {
     // Add payment information
     app.post("/payments", async (req, res) => {
       const payment = req.body;
+      console.log("🚀 ~ app.post ~ payment:", payment)
       const result = await paymentsCollection.insertOne(payment);
+      // console.log("🚀 ~ app.post ~ result:", result)
       const id = payment.bookingId;
       const filter = { _id: new ObjectId(id) };
       const updateDoc = {
