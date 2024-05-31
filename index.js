@@ -5,13 +5,20 @@ const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const port = process.env.PORT || 3000;
-// const stripe = require("stripe")(process.env.STRIPE_KEY);
+const stripe = require("stripe")(process.env.STRIPE_KEY);
 
-//middleware
-app.use(cors());
+// Middleware
+app.use(
+  cors({
+    origin: true,
+    optionsSuccessStatus: 200,
+    credentials: true,
+  })
+);
 app.use(express.json());
 require("colors");
-//database uri
+
+// Database URI
 const uri = `${process.env.DB_URL}`;
 const client = new MongoClient(uri, {
   serverApi: {
@@ -31,7 +38,7 @@ async function dbConnect() {
 }
 dbConnect();
 
-//jwt middleware function
+// JWT middleware function
 function verifyJWT(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
@@ -39,7 +46,8 @@ function verifyJWT(req, res, next) {
   }
 
   const token = authHeader.split(" ")[1];
-  jwt.verify(token, process.env.ACCESS_TOKEN, function (err, decoded) {
+  console.log("🚀 ~ verifyJWT ~ token:", token)
+  jwt.verify(token, process.env.ACCESS_SECRET_TOKEN, function (err, decoded) {
     if (err) {
       return res.status(403).send({ message: "forbidden access" });
     }
@@ -48,36 +56,26 @@ function verifyJWT(req, res, next) {
   });
 }
 
-//run function
 async function run() {
   try {
-    const database = client.db("b612-resale-product-assignment_db")
+    const database = client.db("b612-resale-product-assignment_db");
     const usersCollection = database.collection("users");
     const cartCollection = database.collection("carts");
-    const categoryCollection = database.collection("categoryData");
-    const productsCollection = database.collection("products");
-    const blogCollection = database.collection("questionAndAnswer");
+    const productsCollection = database.collection("products")
     const paymentsCollection = database.collection("payments");
 
-    // jwt access token
-    app.get("/jwt", async (req, res) => {
-      const email = req.query.email;
-      const query = { user_email: email };
-      const user = await usersCollection.findOne(query);
-      if (user) {
-        const token = jwt.sign({ email }, process.env.ACCESS_TOKEN, {
-          expiresIn: "6h",
-        });
-        return res.send({ accessToken: token });
-      }
-      console.log(user);
-      res.status(403).send({ accessToken: "" });
-    });
+    // Authentication Endpoints
 
-    //verify admin
+    // JWT access token
+    app.post("/jwt", (req, res) => {
+      const user = req.body
+      const token = jwt.sign(user, process.env.ACCESS_SECRET_TOKEN, { expiresIn: '1h' })
+      res.send({ token })
+    })
+    // Middleware to verify admin
     const verifyAdmin = async (req, res, next) => {
       const decodedEmail = req.decoded.email;
-      const query = { email: decodedEmail };
+      const query = { user_email: decodedEmail };
       const user = await usersCollection.findOne(query);
       if (user?.role !== "admin") {
         return res.status(403).send({ message: "forbidden access" });
@@ -85,22 +83,29 @@ async function run() {
       next();
     };
 
-    //payment method implement
+    // Payment Endpoints
+
+    // Payment method implementation
     app.post("/create-payment-intent", async (req, res) => {
       const booking = req.body;
       const price = booking.price;
+      console.log("🚀 ~ app.post ~ price:", price)
       const amount = parseInt(price) * 100;
+      console.log("🚀 ~ app.post ~ amount:", amount)
       const paymentIntent = await stripe.paymentIntents.create({
         currency: "usd",
         amount: amount,
         payment_method_types: ["card"],
       });
+      console.log("🚀 ~ app.post ~ paymentIntent:", paymentIntent)
       res.send({
         clientSecret: paymentIntent.client_secret,
       });
     });
 
-    //get method for checking admin in useAdmin hook
+    // User Endpoints
+
+    // Get method for checking admin in useAdmin hook
     app.get("/users/admin/:email", async (req, res) => {
       const email = req.params.email;
       const query = { user_email: email };
@@ -108,108 +113,24 @@ async function run() {
       res.send({ isAdmin: user?.role === "admin" });
     });
 
-    //get method for checking seller in useSeller hook
+    // Get method for checking seller in useSeller hook
     app.get("/users/seller/:email", async (req, res) => {
       const email = req.params.email;
       const query = { user_email: email };
       const user = await usersCollection.findOne(query);
-      res.send({ isSeller: user?.type === "Seller" });
+      res.send({ isSeller: user?.user_accountType === "Seller" });
     });
 
-    //get method for checking buyer in useBuyer hook
+    // Get method for checking buyer in useBuyer hook
     app.get("/users/buyer/:email", async (req, res) => {
       const email = req.params.email;
       const query = { user_email: email };
       const user = await usersCollection.findOne(query);
-      res.send({ isBuyer: user?.type === "Buyer" });
+      res.send({ isBuyer: user?.user_accountType === "Buyer" });
     });
 
-    //get question and answer
-    app.get("/questions", async (req, res) => {
-      const query = {};
-      const result = await blogCollection.find(query).toArray();
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: result,
-      });
-    });
-
-    //get three category items
-    app.get("/categories", async (req, res) => {
-      const query = {};
-      const result = await categoryCollection.find(query).toArray();
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: result,
-      });
-    });
-
-    //get a product by id
-    app.get("/products/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) }
-      const productsById = await productsCollection.findOne(query);
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: productsById,
-      });
-    });
-
-    //get products by email
-    app.get("/product/:email", async (req, res) => {
-      const email = req.params.email;
-      const query = { product_email: email };
-      const cursor = productsCollection.find(query);
-      const productsByEmail = await cursor.toArray();
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: productsByEmail,
-      });
-    });
-
-    //get method for booking product
-
-    app.get("/carts", async (req, res) => {
-      const email = req.query.email;
-      const query = { buyer_email: email };
-      const booking = await cartCollection.find(query).toArray();
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: booking,
-      });
-    });
-    //get method for orders product
-    app.get("/orders", async (req, res) => {
-      const email = req.query.email;
-      const query = { buyer_email: email };
-      const booking = await cartCollection.find(query).toArray();
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: booking,
-      });
-    });
-
-    //get booking items by id
-    app.get("/carts/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await cartCollection.findOne(query);
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: result,
-      });
-    });
-
-    //get users by get method
-    app.get("/users", async (req, res) => {
-      // const user = req.body;
+    // Get all users
+    app.get("/all-users", async (req, res) => {
       const query = {};
       const allUser = await usersCollection.find(query).toArray();
       res.send({
@@ -218,19 +139,41 @@ async function run() {
         data: allUser,
       });
     });
-
-    //get products for advertising in home
-    app.get("/products", async (req, res) => {
-      const query = {};
-      const products = await productsCollection.find(query).toArray();
+    // Get seller users
+    app.get("/sellers", async (req, res) => {
+      const query = { user_accountType: "Seller" };
+      const seller = await usersCollection.find(query).toArray();
       res.send({
         status: true,
         massage: "Successfully got the data",
-        data: products,
+        data: seller,
+      });
+    });
+    // Get buyer users
+    app.get("/my-buyers", async (req, res) => {
+      const email = req.query.email;
+      const query = { buyer_email: email };
+      const buyer = await usersCollection.find(query).toArray();
+      console.log("🚀 ~ app.get ~ query:", query)
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: buyer,
       });
     });
 
-    //delete method for delete user from allUsers
+    // Add new user
+    app.post("/add-user", async (req, res) => {
+      const user = req.body;
+      const result = await usersCollection.insertOne(user);
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: result,
+      });
+    });
+
+    // Delete user
     app.delete("/users/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -242,7 +185,239 @@ async function run() {
       });
     });
 
-    //delete order from my order
+    // Update user role to admin
+    app.patch("/users/admin/:id", verifyJWT, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const result = await usersCollection.updateOne(filter, updateDoc, options);
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: result,
+      });
+    });
+
+    // Verify seller
+    app.patch("/users/verify/:id", verifyJWT, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      console.log("🚀 ~ app.patch ~ id:", id)
+      console.log("🚀 ~ app.patch ~ filter:", filter)
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          verified: true,
+        },
+      };
+      const result = await usersCollection.updateOne(filter, updateDoc, options);
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: result,
+      });
+    });
+
+    // Product Endpoints
+
+    // Get a product by ID
+    app.get("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const productsById = await productsCollection.findOne(query);
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: productsById,
+      });
+    });
+    // Get a product by category
+    app.get("/products-category/:category", async (req, res) => {
+      const category = req.params.category;
+      const query = { product_category: category };
+      const productsByCategory = await productsCollection.find(query).toArray();
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: productsByCategory,
+      });
+    });
+
+    // Get products by email
+    app.get("/products-email/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { product_email: email };
+      const cursor = productsCollection.find(query);
+      const productsByEmail = await cursor.toArray();
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: productsByEmail,
+      });
+    });
+
+    // Get all products
+    app.get("/products", async (req, res) => {
+      const query = {};
+      const products = await productsCollection.find(query).toArray();;
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: products,
+      });
+    });
+    //get products by paginating
+    app.get("/products-by-paginating", async (req, res) => {
+      let page = parseInt(req.query.page);
+      const size = parseInt(req.query.size);
+      const query = {};
+      const cursor = productsCollection.find(query);
+      let skipNumber = page * size;
+      const count = await productsCollection.estimatedDocumentCount();
+      if (skipNumber >= count) {
+        skipNumber = 0;
+      }
+      const products = await cursor.skip(skipNumber).limit(size).toArray();;
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: { count, data: products },
+      });
+    });
+    //get reported items
+    app.get("/products-reported", async (req, res) => {
+      const query = { reported: true };
+      const products = await productsCollection.find(query).toArray();;
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: products,
+      });
+    });
+    // get ad products
+    app.get("/products-ad", async (req, res) => {
+      const query = { ad: true };
+      const products = await productsCollection.find(query).toArray();;
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: products,
+      });
+    });
+    // Add new product
+    app.post("/add-product", async (req, res) => {
+      const product = req.body;
+      const result = await productsCollection.insertOne(product);
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: result,
+      });
+    });
+
+
+    // Delete a product by ID
+    app.delete("/product/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const result = await productsCollection.deleteOne(filter);
+      console.log("🚀 ~ app.delete ~ result:", result)
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: result,
+      });
+    });
+
+    //add a product to report
+    app.patch("/product/report/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          reported: true,
+        },
+      };
+      const result = await productsCollection.updateOne(filter, updateDoc, options);
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: result,
+      });
+    });
+    // Mark a product as advertised
+    app.patch("/product/ad/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          ad: true,
+        },
+      };
+      const result = await productsCollection.updateOne(filter, updateDoc, options);
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: result,
+      });
+    });
+    // Cart Endpoints
+
+    // Get all booking items by email
+    app.get("/carts", async (req, res) => {
+      const email = req.query.email;
+      const query = { buyer_email: email };
+      const booking = await cartCollection.find(query).toArray();
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: booking,
+      });
+    });
+
+    // Get booking item by ID
+    app.get("/carts/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await cartCollection.findOne(query);
+      console.log("🚀 ~ app.get ~ query:", query)
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: result,
+      });
+    });
+
+    // Add new booking item
+    app.put("/carts", async (req, res) => {
+      const booking = req.body;
+      // const query = { _id: booking. };
+      // const document = await cartCollection.findOne(query);
+      // if (document) {
+
+      //   res.send({
+      //     status: true,
+      //     message: "Successfully got the data",
+      //     data: "Product already in cart ",
+      //   });
+
+      // }
+      const result = await cartCollection.insertOne(booking);
+      res.send({
+        status: true,
+        message: "Successfully inserted the data",
+        data: result,
+      });
+    });
+
+    // Delete booking item by ID
     app.delete("/carts/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -254,41 +429,23 @@ async function run() {
       });
     });
 
-    //delete method single person product
-    app.delete("/product/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const result = await productsCollection.deleteOne(filter);
+    // Order Endpoints
+
+    // Get all orders by email
+    app.get("/orders", async (req, res) => {
+      const email = req.query.email;
+      const query = { buyer_email: email };
+      const booking = await cartCollection.find(query).toArray();
       res.send({
         status: true,
         massage: "Successfully got the data",
-        data: result,
+        data: booking,
       });
     });
 
-    //post method for post products
-    app.post("/add-product", async (req, res) => {
-      const product = req.body;
-      const result = await productsCollection.insertOne(product);
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: result,
-      });
-    });
+    // Payment Endpoints
 
-    //post method for users information
-    app.post("/add-user", async (req, res) => {
-      const user = req.body;
-      const result = await usersCollection.insertOne(user);
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: result,
-      });
-    });
-
-    //payments history post method
+    // Add payment information
     app.post("/payments", async (req, res) => {
       const payment = req.body;
       const result = await paymentsCollection.insertOne(payment);
@@ -307,92 +464,32 @@ async function run() {
         data: result,
       });
     });
-
-    //put method for upsert and make admin
-    app.put("/users/admin/:id", verifyJWT, verifyAdmin, async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const options = { upsert: true };
-      const updateDoc = {
-        $set: {
-          role: "admin",
-        },
-      };
-      const result = await usersCollection.updateOne(
-        filter,
-        updateDoc,
-        options
-      );
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: result,
+    app.post('/create-payment-intent', verifyJWT, async (req, res) => {
+      const { price } = req.body;
+      console.log("🚀 ~ app.post ~ price:", price)
+      const amount = parseInt(price * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: 'usd',
+        payment_method_types: ['card']
       });
-    });
 
-    //put method for verified seller
-    app.put("/users/verify/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const options = { upsert: true };
-      const updateDoc = {
-        $set: {
-          verified: true,
-        },
-      };
-      const result = await usersCollection.updateOne(
-        filter,
-        updateDoc,
-        options
-      );
       res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: result,
-      });
-    });
-
-    //put method for ad items true
-    app.put("/product/add/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const options = { upsert: true };
-      const updateDoc = {
-        $set: {
-          ad: true,
-        },
-      };
-      const result = await productsCollection.updateOne(
-        filter,
-        updateDoc,
-        options
-      );
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: result,
-      });
-    });
-
-    //post methods for booking items
-    app.post("/carts", async (req, res) => {
-      const booking = req.body;
-      const result = await cartCollection.insertOne(booking);
-      res.send({
-        status: true,
-        massage: "Successfully got the data",
-        data: result,
-      });
-    });
+        clientSecret: paymentIntent.client_secret
+      })
+    })
   } finally {
+    // Ensuring that the client will close when you finish/error
   }
 }
-run().catch(console.error());
+run().catch(console.error);
 
+// Root endpoint
 app.get("/", async (req, res) => {
-  res.send("Resale products running");
+  res.send("Use ME running");
 });
 
+// Start server
 app.listen(port, () => {
-  console.log(`Resale products running on port : ${port}`);
+  console.log(`Use ME running on port: ${port}`);
 });
