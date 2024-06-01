@@ -9,16 +9,25 @@ const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
 // Middleware
 // app.use(cors());
-app.use(
-  cors({
-    origin: true,
-    optionsSuccessStatus: 200,
-    credentials: true,
-  })
-);
+// app.use(
+//   cors({
+//     origin: true,
+//     optionsSuccessStatus: 200,
+//     credentials: true,
+//   })
+// );
 // const corsOptions = {
 //   origin: "https://b612-final-assingment.web.app"
 // };
+
+// app.use(cors({
+//   origin: ["http://localhost:5173","https://b612-final-assingment.web.app"],
+//   credentials: true,
+// }))
+app.use(cors({ origin: 'https://b612-final-assingment.web.app' }))
+
+
+
 app.use(express.json());
 require("colors");
 
@@ -35,9 +44,9 @@ const client = new MongoClient(uri, {
 async function dbConnect() {
   try {
     await client.connect();
-    console.log("Database connected".yellow);
+    //console.log("Database connected".yellow);
   } catch (error) {
-    console.log(error.name.bgRed, error.message.bold);
+    //console.log(error.name.bgRed, error.message.bold);
   }
 }
 dbConnect();
@@ -50,7 +59,7 @@ function verifyJWT(req, res, next) {
   }
 
   const token = authHeader.split(" ")[1];
-  console.log("🚀 ~ verifyJWT ~ token:", token)
+  //console.log("🚀 ~ verifyJWT ~ token:", token)
   jwt.verify(token, process.env.ACCESS_SECRET_TOKEN, function (err, decoded) {
     if (err) {
       return res.status(403).send({ message: "forbidden access" });
@@ -93,15 +102,15 @@ async function run() {
     app.post("/create-payment-intent", async (req, res) => {
       const booking = req.body;
       const price = booking.price;
-      // console.log("🚀 ~ app.post ~ price:", price)
+      // //console.log("🚀 ~ app.post ~ price:", price)
       const amount = parseInt(price) * 100;
-      // console.log("🚀 ~ app.post ~ amount:", amount)
+      // //console.log("🚀 ~ app.post ~ amount:", amount)
       const paymentIntent = await stripe.paymentIntents.create({
         currency: "usd",
         amount: amount,
         payment_method_types: ["card"],
       });
-      // console.log("🚀 ~ app.post ~ paymentIntent:", paymentIntent)
+      // //console.log("🚀 ~ app.post ~ paymentIntent:", paymentIntent)
       res.send({
         clientSecret: paymentIntent.client_secret,
       });
@@ -158,7 +167,7 @@ async function run() {
       const email = req.query.email;
       const query = { buyer_email: email };
       const buyer = await usersCollection.find(query).toArray();
-      console.log("🚀 ~ app.get ~ query:", query)
+      //console.log("🚀 ~ app.get ~ query:", query)
       res.send({
         status: true,
         massage: "Successfully got the data",
@@ -211,8 +220,8 @@ async function run() {
     app.patch("/users/verify/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
-      console.log("🚀 ~ app.patch ~ id:", id)
-      console.log("🚀 ~ app.patch ~ filter:", filter)
+      //console.log("🚀 ~ app.patch ~ id:", id)
+      //console.log("🚀 ~ app.patch ~ filter:", filter)
       const options = { upsert: true };
       const updateDoc = {
         $set: {
@@ -330,7 +339,7 @@ async function run() {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const result = await productsCollection.deleteOne(filter);
-      console.log("🚀 ~ app.delete ~ result:", result)
+      //console.log("🚀 ~ app.delete ~ result:", result)
       res.send({
         status: true,
         massage: "Successfully got the data",
@@ -391,7 +400,7 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await cartCollection.findOne(query);
-      console.log("🚀 ~ app.get ~ query:", query)
+      //console.log("🚀 ~ app.get ~ query:", query)
       res.send({
         status: true,
         massage: "Successfully got the data",
@@ -450,11 +459,25 @@ async function run() {
     // Payment Endpoints
 
     // Add payment information
+
+    app.get('/payments/:email', verifyJWT, async (req, res) => {
+      const query = { email: req.params.email }
+      if (req.params.email !== req.decoded.email) {
+        return res.status(403).send({ message: 'forbidden access' });
+      }
+      const result = await paymentsCollection.find(query).toArray();
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: result,
+      });
+    })
+
     app.post("/payments", async (req, res) => {
       const payment = req.body;
-      console.log("🚀 ~ app.post ~ payment:", payment)
+      //console.log("🚀 ~ app.post ~ payment:", payment)
       const result = await paymentsCollection.insertOne(payment);
-      // console.log("🚀 ~ app.post ~ result:", result)
+      // //console.log("🚀 ~ app.post ~ result:", result)
       const id = payment.bookingId;
       const filter = { _id: new ObjectId(id) };
       const updateDoc = {
@@ -472,7 +495,7 @@ async function run() {
     });
     app.post('/create-payment-intent', verifyJWT, async (req, res) => {
       const { price } = req.body;
-      console.log("🚀 ~ app.post ~ price:", price)
+      //console.log("🚀 ~ app.post ~ price:", price)
       const amount = parseInt(price * 100);
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
@@ -497,5 +520,5 @@ app.get("/", async (req, res) => {
 
 // Start server
 app.listen(port, () => {
-  console.log(`Use ME running on port: ${port}`);
+  //console.log(`Use ME running on port: ${port}`);
 });
