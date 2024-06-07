@@ -98,6 +98,7 @@ async function run() {
     const database = client.db("b612-resale-product-assignment_db");
     const usersCollection = database.collection("users");
     const cartCollection = database.collection("carts");
+    const orderCollection = database.collection("orders");
     const productsCollection = database.collection("products")
     const paymentsCollection = database.collection("payments");
 
@@ -126,15 +127,12 @@ async function run() {
     app.post("/create-payment-intent", async (req, res) => {
       const booking = req.body;
       const price = booking.price;
-      // //console.log("🚀 ~ app.post ~ price:", price)
       const amount = parseInt(price) * 100;
-      // //console.log("🚀 ~ app.post ~ amount:", amount)
       const paymentIntent = await stripe.paymentIntents.create({
         currency: "usd",
         amount: amount,
         payment_method_types: ["card"],
       });
-      // //console.log("🚀 ~ app.post ~ paymentIntent:", paymentIntent)
       res.send({
         clientSecret: paymentIntent.client_secret,
       });
@@ -244,8 +242,6 @@ async function run() {
     app.patch("/users/verify/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
-      //console.log("🚀 ~ app.patch ~ id:", id)
-      //console.log("🚀 ~ app.patch ~ filter:", filter)
       const options = { upsert: true };
       const updateDoc = {
         $set: {
@@ -447,6 +443,7 @@ async function run() {
 
       // }
       const result = await cartCollection.insertOne(booking);
+      const addToOrder = await orderCollection.insertOne(booking);
       res.send({
         status: true,
         message: "Successfully inserted the data",
@@ -472,11 +469,11 @@ async function run() {
     app.get("/orders", async (req, res) => {
       const email = req.query.email;
       const query = { buyer_email: email };
-      const booking = await cartCollection.find(query).toArray();
+      const orders = await orderCollection.find(query).toArray();
       res.send({
         status: true,
         massage: "Successfully got the data",
-        data: booking,
+        data: orders,
       });
     });
 
@@ -485,12 +482,13 @@ async function run() {
     // Add payment information
 
     app.get('/payments/:email', verifyJWT, async (req, res) => {
-      const query = { email: req.params.email }
+      const query = { buyerEmail: req.params.email }
       if (req.params.email !== req.decoded.email) {
         return res.status(403).send({ message: 'forbidden access' });
       }
-      // console.log("🚀 ~ app.get ~ query:", query)
+      console.log("🚀 ~ app.get ~ query:", query)
       const result = await paymentsCollection.find(query).toArray();
+      console.log("🚀 ~ app.get ~ result:", result)
       res.send({
         status: true,
         massage: "Successfully got the data",
@@ -511,22 +509,26 @@ async function run() {
 
     app.post("/payments", async (req, res) => {
       const payment = req.body;
-      //console.log("🚀 ~ app.post ~ payment:", payment)
-      const result = await paymentsCollection.insertOne(payment);
-      // //console.log("🚀 ~ app.post ~ result:", result)
-      const id = payment.bookingId;
-      const filter = { _id: new ObjectId(id) };
+      console.log("🚀 ~ app.post ~ payment:", payment)
+      const paymentResult = await paymentsCollection.insertOne(payment);
+      console.log('payment info', payment);
+      const query = {
+        _id: {
+          $in: payment.cartIds.map(id => new ObjectId(id))
+        }
+      };
       const updateDoc = {
         $set: {
           paid: true,
           transactionId: payment.transactionId,
         },
       };
-      const updateResult = await cartCollection.updateOne(filter, updateDoc);
+      const orderUpdate = await orderCollection.updateMany(query, updateDoc);
+      const deleteResult = await cartCollection.deleteMany(query);
       res.send({
         status: true,
         massage: "Successfully got the data",
-        data: result,
+        data: { paymentResult, deleteResult },
       });
     });
     app.post('/create-payment-intent', verifyJWT, async (req, res) => {
