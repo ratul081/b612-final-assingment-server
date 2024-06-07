@@ -5,17 +5,18 @@ const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const port = process.env.PORT || 3000;
+// const port = process.env.PORT || 7771;
 const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
 // Middleware
 // app.use(cors());
-// app.use(
-//   cors({
-//     origin: true,
-//     optionsSuccessStatus: 200,
-//     credentials: true,
-//   })
-// );
+app.use(
+  cors({
+    origin: true,
+    optionsSuccessStatus: 200,
+    credentials: true,
+  })
+);
 // const corsOptions = {
 //   origin: "https://b612-final-assingment.web.app"
 // };
@@ -24,7 +25,30 @@ const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 //   origin: ["http://localhost:5173","https://b612-final-assingment.web.app"],
 //   credentials: true,
 // }))
-app.use(cors({ origin: 'https://b612-final-assingment.web.app' }))
+// app.use(cors({ origin: 'https://b612-final-assingment.web.app' }))
+
+// const corsOptions = {
+//   origin: 'https://b612-final-assingment.web.app',
+//   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+//   allowedHeaders: 'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+// };
+
+// app.use(cors(corsOptions));
+
+
+
+
+
+// const corsConfig = {
+//   origin: '*',
+//   credentials: true,
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
+// }
+// app.use(cors(corsConfig))
+
+
+
+
 
 
 
@@ -465,6 +489,7 @@ async function run() {
       if (req.params.email !== req.decoded.email) {
         return res.status(403).send({ message: 'forbidden access' });
       }
+      // console.log("🚀 ~ app.get ~ query:", query)
       const result = await paymentsCollection.find(query).toArray();
       res.send({
         status: true,
@@ -472,6 +497,17 @@ async function run() {
         data: result,
       });
     })
+    //get buyer information from payment
+    // app.get('/all-payments', verifyJWT, async (req, res) => {
+    //   const query = {};
+    //   const result = await paymentsCollection.find(query).toArray();
+    //   // console.log("🚀 ~ app.get ~ result:", result)
+    //   res.send({
+    //     status: true,
+    //     massage: "Successfully got the data",
+    //     data: result,
+    //   });
+    // })
 
     app.post("/payments", async (req, res) => {
       const payment = req.body;
