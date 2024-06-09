@@ -15,6 +15,7 @@ app.use(
     origin: true,
     optionsSuccessStatus: 200,
     credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   })
 );
 // const corsOptions = {
@@ -22,7 +23,8 @@ app.use(
 // };
 
 // app.use(cors({
-//   origin: ["http://localhost:5173","https://b612-final-assingment.web.app"],
+//   origin: "http://localhost:5173",
+//   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
 //   credentials: true,
 // }))
 // app.use(cors({ origin: 'https://b612-final-assingment.web.app' }))
