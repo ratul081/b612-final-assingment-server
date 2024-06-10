@@ -286,8 +286,9 @@ async function run() {
     // Get products by email
     app.get("/products-email/:email", async (req, res) => {
       const email = req.params.email;
-      const query = { product_email: email };
+      const query = { seller_email: email };
       const cursor = productsCollection.find(query);
+      // console.log("🚀 ~ app.get ~ query:", query)
       const productsByEmail = await cursor.toArray();
       res.send({
         status: true,
@@ -478,6 +479,17 @@ async function run() {
         data: orders,
       });
     });
+    app.get("/orders-seller", async (req, res) => {
+      const email = req.query.email;
+      const query = { seller_email: email };
+      // console.log("🚀 ~ app.get ~ email:", email)
+      const orders = await orderCollection.find(query).toArray();
+      res.send({
+        status: true,
+        massage: "Successfully got the data",
+        data: orders,
+      });
+    });
 
     // Payment Endpoints
 
@@ -488,9 +500,9 @@ async function run() {
       if (req.params.email !== req.decoded.email) {
         return res.status(403).send({ message: 'forbidden access' });
       }
-      console.log("🚀 ~ app.get ~ query:", query)
+      // console.log("🚀 ~ app.get ~ query:", query)
       const result = await paymentsCollection.find(query).toArray();
-      console.log("🚀 ~ app.get ~ result:", result)
+      // console.log("🚀 ~ app.get ~ result:", result)
       res.send({
         status: true,
         massage: "Successfully got the data",
@@ -511,9 +523,9 @@ async function run() {
 
     app.post("/payments", async (req, res) => {
       const payment = req.body;
-      console.log("🚀 ~ app.post ~ payment:", payment)
+      // console.log("🚀 ~ app.post ~ payment:", payment)
       const paymentResult = await paymentsCollection.insertOne(payment);
-      console.log('payment info', payment);
+      // console.log('payment info', payment);
       const query = {
         _id: {
           $in: payment.cartIds.map(id => new ObjectId(id))
